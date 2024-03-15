@@ -1,0 +1,360 @@
+﻿Program.Sub.Preflight.Start
+Program.External.Include.Library("GCG_5916_Try_Catch.lib")
+Program.External.Include.Library("GCG_5916_UPLRTRH.lib")
+V.Global.bCreatePart.Declare
+Program.External.Include.Library("GCG_5916_UPLINV.lib")
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'ONLY RUN THIS ONCE
+V.Local.sSICTV.Declare
+V.Local.sSQL.Declare
+V.Local.sSQLFilePath.Declare
+V.Local.sFile.Declare
+V.Local.bExcel.Declare
+V.Local.bExists.Declare
+F.Intrinsic.Control.Try
+
+F.Automation.MSExcel.CheckPresence(V.Local.bExcel)
+V.Global.bCreatePart.Set(False)
+
+F.Intrinsic.Control.If(V.Local.bExcel)
+	F.Intrinsic.UI.ShowOpenFileDialog(,"|*.xlsx;*.xls",,V.Local.sFile)
+	F.Intrinsic.Control.If(V.Local.sFile.IsCancel)
+		F.Intrinsic.Control.End
+	F.Intrinsic.Control.EndIf
+	F.Automation.MSExcel.CreateAppObject("oExcel")
+	F.Automation.MSExcel.OpenWorkbook("oExcel","oExportWorkbook",V.Local.sFile)
+	F.Automation.MSExcel.OpenWorksheet("oExportWorkbook","oAfter",1)
+	F.Automation.MSExcel.OpenWorksheet("oExportWorkbook","oBefore",2)
+F.Intrinsic.Control.Else
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.CallSub(LoopThroughLines)
+
+F.Intrinsic.Control.If(V.Local.bExcel)
+	F.Automation.Generic.DestroyObject("oAfter")
+	F.Automation.Generic.DestroyObject("oBefore")
+	F.Automation.Generic.DestroyObject("oExportWorkbook")
+	F.Automation.Generic.DestroyObject("oExcel")
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMessage,"ScriptFile",V.Caller.ScriptFile,"CurrentSubroutine",V.Ambient.CurrentSubroutine)
+	F.Intrinsic.Control.If(V.Local.bExcel)
+		F.Automation.Generic.DestroyObject("oAfter")
+		F.Automation.Generic.DestroyObject("oBefore")
+		F.Automation.Generic.DestroyObject("oExportWorkbook")
+		F.Automation.Generic.DestroyObject("oExcel")
+	F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.LoopThroughLines.Start
+V.Local.sCols.Declare
+V.Local.sVal.Declare
+V.Local.sLine.Declare
+V.Local.sRtr.Declare
+V.Local.sPart.Declare
+V.Local.sDescr.Declare
+V.Local.sLMO.Declare
+V.Local.sRow.Declare
+V.Local.sSQL.Declare
+V.Local.iRow.Declare
+V.Local.bEnd.Declare
+V.Local.bPNT.Declare
+V.Local.sFilePath.Declare
+V.Local.sFileString.Declare
+V.Local.sFilter.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.String.Build("{0}\GCG_5916_ROUTER_HEADER.txt",V.Caller.FilesDir,V.Local.sFilePath)
+F.Intrinsic.File.File2String(V.Local.sFilePath,V.Local.sFileString)
+F.Data.DataTable.CreateFromString("dtRouterHeader",V.Local.sFileString,"ROUTER_NUM*!*ROUTER_DESCR","String*!*String","*!*",V.Ambient.NewLine,False)
+F.Data.DataView.Create("dtRouterHeader","dvRouter")
+
+F.Automation.MSExcel.ReadRow("oBefore",1,1,40,V.Local.sCols)
+F.Intrinsic.String.Replace(V.Local.sCols,"*!*",", ",V.Local.sCols)
+V.Local.iRow.Set(2)
+F.ODBC.Connection!con.OpenCompanyConnection
+
+F.Intrinsic.Control.DoUntil(V.Local.bEnd)
+	F.Automation.MSExcel.ReadCell("oAfter",V.Local.iRow,1,V.Local.sVal)
+	F.Automation.MSExcel.ReadCell("oAfter",V.Local.iRow,4,V.Local.sLine)
+	F.Automation.MSExcel.ReadCell("oAfter",V.Local.iRow,6,V.Local.sLMO)
+	F.Automation.MSExcel.ReadCell("oAfter",V.Local.iRow,7,V.Local.sPart)
+	F.Intrinsic.Control.If(V.Local.sLMO.Trim,=,"O",and,V.Local.sPart.Trim,=,V.Local.sVal.Trim)
+		V.Local.bPNT.Set(True)
+	F.Intrinsic.Control.Else
+		V.Local.bPNT.Set(False)
+	F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.If(V.Local.sLine.Trim,=,"")
+		V.Local.bEnd.Set(True)
+	F.Intrinsic.Control.ElseIf(V.Local.sLine.Trim,=,"DELETE",or,V.Local.bPNT,=,True)
+		'ROUTER
+		F.Intrinsic.Control.If(V.Local.sVal,!=,V.Local.sRtr)
+			V.Local.sRtr.Set(V.Local.sVal)
+			F.Intrinsic.String.Build("delete from ROUTER_LINE where ROUTER = '{0}';",V.Local.sRtr.PSQLFriendly,V.Local.sSQL)
+			F.ODBC.Connection!con.Execute(V.Local.sSQL)
+			F.Intrinsic.String.Build("delete from ROUTER_HEADER where ROUTER = '{0}';",V.Local.sRtr.PSQLFriendly,V.Local.sSQL)
+			F.ODBC.Connection!con.Execute(V.Local.sSQL)
+			F.Intrinsic.String.Build("delete from ROUTER_SUPP_LINE where RTR_NUM = '{0}';",V.Local.sRtr.PSQLFriendly,V.Local.sSQL)
+			F.ODBC.Connection!con.Execute(V.Local.sSQL)
+			F.Intrinsic.String.Build("delete from ROUTER_SUPP_HDR where RTR_NUM = '{0}';",V.Local.sRtr.PSQLFriendly,V.Local.sSQL)
+			F.ODBC.Connection!con.Execute(V.Local.sSQL)
+			F.Intrinsic.String.Build("delete from ROUTER_XREF where ROUTER = '{0}';",V.Local.sRtr.PSQLFriendly,V.Local.sSQL)
+			F.ODBC.Connection!con.Execute(V.Local.sSQL)
+			F.Intrinsic.String.Build("delete from ROUTER_DESC where ROUTER = '{0}';",V.Local.sRtr.PSQLFriendly,V.Local.sSQL)
+			F.ODBC.Connection!con.Execute(V.Local.sSQL)
+			F.Intrinsic.String.Build("delete from ROUTER_OP_CODES where ROUTER = '{0}';",V.Local.sRtr.PSQLFriendly,V.Local.sSQL)
+			F.ODBC.Connection!con.Execute(V.Local.sSQL)
+			F.Intrinsic.String.Build("delete from RTR_SEQ_COMMENTS where RTR_NUMBER = '{0}';",V.Local.sRtr.PSQLFriendly,V.Local.sSQL)
+			F.ODBC.Connection!con.Execute(V.Local.sSQL)
+			F.Intrinsic.String.Build("[ROUTER_NUM] = '{0}'",V.Local.sRtr.PSQLFriendly,V.Local.sFilter)
+			F.Data.DataView.SetFilter("dtRouterHeader","dvRouter",V.Local.sFilter)
+			F.Intrinsic.Control.If(V.DataView.dtRouterHeader!dvRouter.RowCount,=,0)
+				'No descr, use default descr
+				F.Intrinsic.Control.CallSub(GenRouterHeaderInfo,"Rtr",V.Local.sRtr,"Descr","ROUTER FOR SICTV")
+			F.Intrinsic.Control.Else
+				F.Intrinsic.Control.CallSub(GenRouterHeaderInfo,"Rtr",V.Local.sRtr,"Descr",V.DataView.dtRouterHeader!dvRouter(0).ROUTER_DESCR!FieldValTrim)
+			F.Intrinsic.Control.EndIf
+			
+		F.Intrinsic.Control.EndIf
+		F.Data.DataTable.Merge("dtRTRHEAD","UPLRTRH",True,2)
+		'ROUTER_SUFFIX
+'		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,2,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, '{1}'",V.Local.sRow,V.Local.sVal)
+		'ROUTER_TYPE
+'		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,3,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, '{1}'",V.Local.sRow,V.Local.sVal)
+		'LINE_ROUTER
+		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,4,V.Local.sVal)
+		F.Intrinsic.String.LPad(V.Local.sVal,"0",6,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, '{1}'",V.Local.sRow,V.Local.sVal)
+		F.Data.DataTable.SetValue("UPLRTRH",V.DataTable.UPLRTRH.RowCount--,"Sequence",V.Local.sVal.Trim)
+		'ROUTER_INSERT
+'		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,5,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, '{1}'",V.Local.sRow,V.Local.sVal)
+		'LMO
+		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,6,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, '{1}'",V.Local.sRow,V.Local.sVal)
+		F.Data.DataTable.SetValue("UPLRTRH",V.DataTable.UPLRTRH.RowCount--,"LMO",V.Local.sVal.Trim)
+		'PART_WC_OUTSIDE
+		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,7,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, '{1}'",V.Local.sRow,V.Local.sVal)
+		F.Intrinsic.Control.If(V.DataTable.UPLRTRH(V.DataTable.UPLRTRH.RowCount--).LMO!FieldVal,!=,"L")
+			F.Data.DataTable.SetValue("UPLRTRH",V.DataTable.UPLRTRH.RowCount--,"PartOutside",V.Local.sVal.Trim)
+		F.Intrinsic.Control.Else
+			F.Data.DataTable.SetValue("UPLRTRH",V.DataTable.UPLRTRH.RowCount--,"WorkCenter",V.Local.sVal.Trim)
+		F.Intrinsic.Control.EndIf
+		'OPERATION
+		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,8,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, '{1}'",V.Local.sRow,V.Local.sVal)
+		F.Data.DataTable.SetValue("UPLRTRH",V.DataTable.UPLRTRH.RowCount--,"OperationCode",V.Local.sVal.Trim)
+		'SET_UP
+		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,9,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, {1}",V.Local.sRow,V.Local.sVal)
+		F.Data.DataTable.SetValue("UPLRTRH",V.DataTable.UPLRTRH.RowCount--,"Setup",V.Local.sVal.Float)
+		'RUN_TIME
+		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,10,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, {1}",V.Local.sRow,V.Local.sVal)
+		F.Data.DataTable.SetValue("UPLRTRH",V.DataTable.UPLRTRH.RowCount--,"RunTime",V.Local.sVal.Float)
+		'RATE
+		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,11,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, {1}",V.Local.sRow,V.Local.sVal)
+		F.Data.DataTable.SetValue("UPLRTRH",V.DataTable.UPLRTRH.RowCount--,"Rate",V.Local.sVal.Float)
+		'FILLER
+'		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,12,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, '{1}'",V.Local.sRow,V.Local.sVal)
+		'FREQUENCY
+		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,13,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, {1}",V.Local.sRow,V.Local.sVal)
+		F.Data.DataTable.SetValue("UPLRTRH",V.DataTable.UPLRTRH.RowCount--,"Frequency",V.Local.sVal.Long)
+		'MULTIPLE
+		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,14,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, {1}",V.Local.sRow,V.Local.sVal)
+		
+		'DESC_RT_LINE
+		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,15,V.Local.sDescr)
+'		F.Intrinsic.String.Build("{0}, '{1}'",V.Local.sRow,V.Local.sVal)
+		F.Data.DataTable.SetValue("UPLRTRH",V.DataTable.UPLRTRH.RowCount--,"SeqDescription",V.Local.sDescr.Trim)
+		'UM_INVENTORY
+		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,16,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, '{1}'",V.Local.sRow,V.Local.sVal)
+		F.Data.DataTable.SetValue("UPLRTRH",V.DataTable.UPLRTRH.RowCount--,"UM",V.Local.sVal.Trim)
+		'OVERLAP
+		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,17,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, {1}",V.Local.sRow,V.Local.sVal)
+		F.Data.DataTable.SetValue("UPLRTRH",V.DataTable.UPLRTRH.RowCount--,"Overlap",V.Local.sVal.Long)
+		'WC_FACTOR
+		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,18,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, {1}",V.Local.sRow,V.Local.sVal)
+		F.Data.DataTable.SetValue("UPLRTRH",V.DataTable.UPLRTRH.RowCount--,"WCFactor",V.Local.sVal.Long)
+		'ACTUAL_WT
+'		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,19,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, {1}",V.Local.sRow,V.Local.sVal)
+		'FLAG_MINIMUM
+		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,20,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, '{1}'",V.Local.sRow,V.Local.sVal)
+		F.Data.DataTable.SetValue("UPLRTRH",V.DataTable.UPLRTRH.RowCount--,"MinimumFlag",V.Local.sVal.Trim)
+		'AMT_MINIMUM
+		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,21,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, {1}",V.Local.sRow,V.Local.sVal)
+		F.Data.DataTable.SetValue("UPLRTRH",V.DataTable.UPLRTRH.RowCount--,"MinimumOuts",V.Local.sVal.Float)
+		'SEC_MIN_HR
+'		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,22,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, '{1}'",V.Local.sRow,V.Local.sVal)
+		'GROUP_SEQUENCE
+'		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,23,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, '{1}'",V.Local.sRow,V.Local.sVal)
+		'CREW_SIZE
+		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,24,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, {1}",V.Local.sRow,V.Local.sVal)
+		F.Data.DataTable.SetValue("UPLRTRH",V.DataTable.UPLRTRH.RowCount--,"CrewSize",V.Local.sVal.Float)
+		'RUN_TIME_D6
+'		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,25,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, {1}",V.Local.sRow,V.Local.sVal)
+		'MES_PROCESS_ID
+'		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,26,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, {1}",V.Local.sRow,V.Local.sVal)
+		'PRICE_PERCENT
+'		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,27,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, {1}",V.Local.sRow,V.Local.sVal)
+		'FLAG_MAIN_COMMENT
+		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,28,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, '{1}'",V.Local.sRow,V.Local.sVal)
+		F.Data.DataTable.SetValue("UPLRTRH",V.DataTable.UPLRTRH.RowCount--,"MainCommentFlag",V.Local.sVal.Trim)
+		'LEAD_TIME
+		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,29,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, {1}",V.Local.sRow,V.Local.sVal)
+		F.Data.DataTable.SetValue("UPLRTRH",V.DataTable.UPLRTRH.RowCount--,"LeadTime",V.Local.sVal.Long)
+		'PART_LOCN
+		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,30,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, '{1}'",V.Local.sRow,V.Local.sVal)
+		F.Data.DataTable.SetValue("UPLRTRH",V.DataTable.UPLRTRH.RowCount--,"PartLocn",V.Local.sVal.Trim)
+		'TOOLING_SEQ
+		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,31,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, '{1}'",V.Local.sRow,V.Local.sVal)
+		F.Data.DataTable.SetValue("UPLRTRH",V.DataTable.UPLRTRH.RowCount--,"ToolingFlag",V.Local.sVal.Trim)
+		'SORT_CODE
+		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,32,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, '{1}'",V.Local.sRow,V.Local.sVal)
+		F.Data.DataTable.SetValue("UPLRTRH",V.DataTable.UPLRTRH.RowCount--,"PartLocn",V.Local.sVal.Trim)
+		'PROJ_GROUP
+'		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,33,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, '{1}'",V.Local.sRow,V.Local.sVal)
+		'SIGNOFF_GRPUSR
+		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,34,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, '{1}'",V.Local.sRow,V.Local.sVal)
+		F.Data.DataTable.SetValue("UPLRTRH",V.DataTable.UPLRTRH.RowCount--,"SignoffGrpUsr",V.Local.sVal.Trim)
+		'SIGNOFF_TYPE
+		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,35,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, '{1}'",V.Local.sRow,V.Local.sVal)
+		F.Data.DataTable.SetValue("UPLRTRH",V.DataTable.UPLRTRH.RowCount--,"SignoffType",V.Local.sVal.Trim)
+		'BUILT_FROM_BOM
+'		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,36,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, '{1}'",V.Local.sRow,V.Local.sVal)
+		'ALLOW_CHRG
+'		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,37,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, '{1}'",V.Local.sRow,V.Local.sVal)
+		'OMIT_FROM_WO
+'		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,38,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, '{1}'",V.Local.sRow,V.Local.sVal)
+		'FINAL_OVERRIDE_FLG
+'		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,39,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, '{1}'",V.Local.sRow,V.Local.sVal)
+		'OTH_LANGUAGE
+'		F.Automation.MSExcel.ReadCell("oBefore",V.Local.iRow,40,V.Local.sVal)
+'		F.Intrinsic.String.Build("{0}, '{1}'",V.Local.sRow,V.Local.sVal)
+		
+'		F.Intrinsic.String.Build("insert into ROUTER_LINE ({0}) values ('{1}');",V.Local.sCols,V.Local.sRow,V.Local.sSQL)
+'		F.ODBC.Connection!con.Execute(V.Local.sSQL)
+	F.Intrinsic.Control.EndIf
+	F.Intrinsic.Math.Add(V.Local.iRow,1,V.Local.iRow)
+F.Intrinsic.Control.Loop
+F.ODBC.Connection!con.Close
+
+F.Data.DataTable.Close("dtRouterHeader")
+
+'call upload program
+F.Intrinsic.Control.CallSub(UPLINV)
+F.Intrinsic.Control.CallSub(UPLRTRH)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMessage,"ScriptFile",V.Caller.ScriptFile,"CurrentSubroutine",V.Ambient.CurrentSubroutine)
+	F.Automation.Generic.DestroyObject("oAfter")
+	F.Automation.Generic.DestroyObject("oBefore")
+	F.Automation.Generic.DestroyObject("oExportWorkbook")
+	F.Automation.Generic.DestroyObject("oExcel")
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.LoopThroughLines.End
+
+Program.Sub.GenRouterHeaderInfo.Start
+'V.Args.Rtr, V.Args.Descr
+V.Local.sPartInfo.Declare
+V.Local.sSQL.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.Control.If(V.DataTable.dtRTRHEAD.Exists)
+	F.Data.DataTable.DeleteRow("dtRTRHEAD")
+F.Intrinsic.Control.Else
+	F.Data.DataTable.Create("dtRTRHEAD",True)
+	F.Data.DataTable.AddColumn("dtRTRHEAD","RouterNumber","String","")
+	F.Data.DataTable.AddColumn("dtRTRHEAD","RouterDescription","String","")
+	F.Data.DataTable.AddColumn("dtRTRHEAD","CustomerID","String","")
+	F.Data.DataTable.AddColumn("dtRTRHEAD","ExtraDescr1","String","")
+	F.Data.DataTable.AddColumn("dtRTRHEAD","ExtraDescr2","String","")
+	F.Data.DataTable.AddColumn("dtRTRHEAD","ExtraDescr3","String","")
+	F.Data.DataTable.AddColumn("dtRTRHEAD","Quantity1","Float",1)
+	F.Data.DataTable.AddColumn("dtRTRHEAD","Quantity2","Float",0)
+	F.Data.DataTable.AddColumn("dtRTRHEAD","Quantity3","Float",0)
+	F.Data.DataTable.AddColumn("dtRTRHEAD","Quantity4","Float",0)
+	F.Data.DataTable.AddColumn("dtRTRHEAD","DrawingNumber","String","")
+	F.Data.DataTable.AddColumn("dtRTRHEAD","Scrap","Float",0)
+	F.Data.DataTable.AddColumn("dtRTRHEAD","CustomerPartNum","String","")
+	F.Data.DataTable.AddColumn("dtRTRHEAD","User1","String","")
+	F.Data.DataTable.AddColumn("dtRTRHEAD","User2","String","")
+	F.Data.DataTable.AddColumn("dtRTRHEAD","Commission","Float",0)
+	F.Data.DataTable.AddColumn("dtRTRHEAD","Quantity5","Float",0)
+	F.Data.DataTable.AddColumn("dtRTRHEAD","Quantity6","Float",0)
+	F.Data.DataTable.AddColumn("dtRTRHEAD","Quantity7","Float",0)
+	F.Data.DataTable.AddColumn("dtRTRHEAD","Quantity8","Float",0)
+	F.Data.DataTable.AddColumn("dtRTRHEAD","Quantity9","Float",0)
+	F.Data.DataTable.AddColumn("dtRTRHEAD","Quantity10","Float",0)
+	F.Data.DataTable.AddColumn("dtRTRHEAD","ProductLine","String","")
+	F.Data.DataTable.AddColumn("dtRTRHEAD","OmitFromRouterRepriceFlag","String","N")
+F.Intrinsic.Control.EndIf
+
+F.Global.Inventory.GetPartInfo(V.Args.Rtr,"",V.Local.sPartInfo)
+F.Intrinsic.Control.If(V.Local.sPartInfo,!=,"***NOPARTFOUND***")
+	F.Intrinsic.String.Build("delete from INVENTORY_MSTR where PART = '{0}';",V.Args.Rtr.PSQLFriendly,V.Local.sSQL)
+	F.ODBC.Connection!con.Execute(V.Local.sSQL)
+	F.Intrinsic.String.Build("delete from INVENTORY_MST2 where PART = '{0}';",V.Args.Rtr.PSQLFriendly,V.Local.sSQL)
+	F.ODBC.Connection!con.Execute(V.Local.sSQL)
+	F.Intrinsic.String.Build("delete from INVENTORY_MST3 where PART = '{0}';",V.Args.Rtr.PSQLFriendly,V.Local.sSQL)
+	F.ODBC.Connection!con.Execute(V.Local.sSQL)
+	F.Intrinsic.String.Build("delete from INVENTORY_COST where PART = '{0}';",V.Args.Rtr.PSQLFriendly,V.Local.sSQL)
+	F.ODBC.Connection!con.Execute(V.Local.sSQL)
+	F.Intrinsic.String.Build("delete from PART_XREF_USER where PART = '{0}';",V.Args.Rtr.PSQLFriendly,V.Local.sSQL)
+	F.ODBC.Connection!con.Execute(V.Local.sSQL)
+F.Intrinsic.Control.EndIf
+F.Data.DataTable.AddRow("UPLINV","PartNumber",V.Args.Rtr,"InventoryUM","EA","PartDescr",V.Args.Descr,"ProductLine","FG","Source","M")
+F.Data.DataTable.AddRow("dtRTRHEAD","RouterNumber",V.Args.Rtr,"RouterDescription",V.Args.Descr,"CustomerID","","CustomerPartNum",V.Args.Rtr)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMessage,"ScriptFile",V.Caller.ScriptFile,"CurrentSubroutine",V.Ambient.CurrentSubroutine)
+	F.Automation.Generic.DestroyObject("oAfter")
+	F.Automation.Generic.DestroyObject("oBefore")
+	F.Automation.Generic.DestroyObject("oExportWorkbook")
+	F.Automation.Generic.DestroyObject("oExcel")
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.GenRouterHeaderInfo.End
+
+Program.Sub.Comments.Start
+${$5$}$3.0.0.0$}$1
+${$6$}$bbaker$}$20210205201535216$}$pM7xsHplA2E9VCTenDTJ47gi1rF/t66WkTywozDgBvtlBCuEvJe9zWKcBFe5Kb07YF7Qmk0EpSo=
+Program.Sub.Comments.End
