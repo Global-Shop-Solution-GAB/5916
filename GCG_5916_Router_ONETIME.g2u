@@ -1,0 +1,488 @@
+﻿Program.Sub.Preflight.Start
+Program.External.Include.Library("GCG_5916_Try_Catch.lib")
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+'ONLY RUN THIS ONCE
+V.Local.sSICTV.Declare
+V.Local.sSQL.Declare
+V.Local.sSQLFilePath.Declare
+V.Local.sFile.Declare
+V.Local.iInc.Declare
+V.Local.bExcel.Declare
+V.Local.bCalc.Declare
+V.Local.bExists.Declare
+F.Intrinsic.Control.Try
+
+'F.Intrinsic.Control.End
+
+F.Intrinsic.Control.CallSub(GetRouterLinesTable)
+
+'Get list of routers needed to change
+F.Data.DataView.Create("dtRouterLines","dvPNTWorkCenter")
+F.Data.DataView.SetFilter("dtRouterLines","dvPNTWorkCenter","[LMO] = 'L' and [PART_WC_OUTSIDE] = 'PNT'")
+F.Data.DataView.ToDataTableDistinct("dtRouterLines","dvPNTWorkCenter","dtRouters","ROUTER*!*ROUTER_SUFFIX",True)
+F.Data.DataView.Close("dtRouterLines","dvPNTWorkCenter")
+
+F.Intrinsic.Control.If(V.DataTable.dtRouters.RowCount,>,0)
+	F.Global.General.ReadOption("401113",3,-1,V.Local.iInc)
+	
+	'Get selling company code CCC
+'	F.Intrinsic.String.Build("{0}\GCG_5916_SICTV_CCC.data",V.Ambient.ScriptPath,V.Local.sSICTV)
+'	F.Intrinsic.File.File2String(V.Local.sSICTV,V.Local.sSICTV)
+'	'read database to get vendor code
+'	F.Intrinsic.String.Build("select ORGN_VENDOR from INTERCMPNY_XREF where ORGN_CMPNY = '{0}' and DEST_CMPNY = '{1}';",V.Caller.CompanyCode,V.Local.sSICTV,V.Local.sSQL)
+'	F.ODBC.Connection!con.OpenCompanyConnection
+'	F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sSICTV)
+'	F.ODBC.Connection!con.Close
+	V.Local.sSICTV.Set("715250")
+	
+	F.Automation.MSExcel.CheckPresence(V.Local.bExcel)
+	F.Automation.OOGeneral.CheckPresence(V.Local.bCalc)
+	
+	F.Intrinsic.Control.If(V.Local.bExcel)
+		F.Intrinsic.String.Build("{0}EXPORT.XLSX",V.Caller.LocalGSSTempDir,V.Local.sFile)
+		F.Intrinsic.File.Exists(V.Local.sFile,V.Local.bExists)
+		F.Intrinsic.Control.If(V.Local.bExists)
+			F.Intrinsic.File.DeleteFile(V.Local.sFile)
+		F.Intrinsic.Control.EndIf
+		F.Automation.MSExcel.CreateAppObject("oExcel")
+		F.Automation.MSExcel.CreateWorkbook("oExcel","oExportWorkbook",V.Local.sFile)
+	F.Intrinsic.Control.ElseIf(V.Local.bCalc)
+		F.Intrinsic.String.Build("{0}EXPORT.XLSX",V.Caller.LocalGSSTempDir,V.Local.sFile)
+		F.Intrinsic.File.Exists(V.Local.sFile,V.Local.bExists)
+		F.Intrinsic.Control.If(V.Local.bExists)
+			F.Intrinsic.File.DeleteFile(V.Local.sFile)
+		F.Intrinsic.Control.EndIf
+		F.Automation.OOGeneral.CreateContainer("oOOContainer")
+		F.Automation.OOGeneral.CreateAppObject("oOOContainer","oCalc")
+		F.Automation.OOCalc.CreateWorkbook("oOOContainer","oCalc","oExportWorkbook")
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.Control.CallSub(SaveToExcel,"Sheet","Before","Excel",V.Local.bExcel,"Calc",V.Local.bCalc)
+	
+	F.Intrinsic.Control.CallSub(LoopThroughLines,"Inc",V.Local.iInc,"Vendor",V.Local.sSICTV,"Excel",V.Local.bExcel,"Calc",V.Local.bCalc)
+	
+	F.Intrinsic.Control.CallSub(SaveToExcel,"Sheet","After","Excel",V.Local.bExcel,"Calc",V.Local.bCalc)
+	
+	F.Intrinsic.Control.If(V.Local.bExcel)
+		F.Automation.MSExcel.SaveWorkbook("oExportWorkbook")
+		F.Automation.Generic.DestroyObject(V.Args.BeforeWorksheet)
+		F.Automation.Generic.DestroyObject(V.Args.AfterWorksheet)
+		F.Automation.Generic.DestroyObject("oExportWorkbook")
+		F.Automation.Generic.DestroyObject("oExcel")
+		F.Intrinsic.Task.ShellExec(0,"OPEN",V.Local.sFile,"","",1)
+	F.Intrinsic.Control.ElseIf(V.Local.bCalc)
+		F.Automation.OOCalc.SaveWorkbook("oOOContainer","oExportWorkbook",V.Local.sFile)
+		F.Automation.Generic.DestroyObject(V.Args.BeforeWorksheet)
+		F.Automation.Generic.DestroyObject(V.Args.AfterWorksheet)
+		F.Automation.Generic.DestroyObject("oExportWorkbook")
+		F.Automation.Generic.DestroyObject("oCalc")
+		F.Automation.Generic.DestroyObject("oOOContainer")
+		F.Intrinsic.Task.ShellExec(0,"OPEN",V.Local.sFile,"","",1)
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.String.Build("{0}SQL_ROUTER_LINES.txt",V.Caller.LocalGSSTempDir,V.Local.sSQLFilePath)
+	F.Intrinsic.Task.ShellExec(0,"OPEN",V.Local.sSQLFilePath,"","",1)
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMessage,"ScriptFile",V.Caller.ScriptFile,"CurrentSubroutine",V.Ambient.CurrentSubroutine)
+	F.Intrinsic.Control.If(V.Local.bExcel)
+		F.Automation.MSExcel.SaveWorkbook("oExportWorkbook")
+		F.Automation.Generic.DestroyObject(V.Args.BeforeWorksheet)
+		F.Automation.Generic.DestroyObject(V.Args.AfterWorksheet)
+		F.Automation.Generic.DestroyObject("oExportWorkbook")
+		F.Automation.Generic.DestroyObject("oExcel")
+	F.Intrinsic.Control.ElseIf(V.Local.bCalc)
+		F.Automation.OOCalc.SaveWorkbook("oOOContainer","oExportWorkbook",V.Local.sFile)
+		F.Automation.Generic.DestroyObject(V.Args.BeforeWorksheet)
+		F.Automation.Generic.DestroyObject(V.Args.AfterWorksheet)
+		F.Automation.Generic.DestroyObject("oExportWorkbook")
+		F.Automation.Generic.DestroyObject("oCalc")
+		F.Automation.Generic.DestroyObject("oOOContainer")
+	F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.GetRouterLinesTable.Start
+F.Intrinsic.Control.Try
+
+F.ODBC.Connection!con.OpenCompanyConnection
+F.ODBC.Connection!con.Execute("delete from ROUTER_LINE where ROUTER in ('2013-00115       a', '23-1101          d', '2416p21445       01', '24713            x6', '307-101          a', '43 x 97          -', '43 x97           -', '6630 form        -', '6630 laser       -', '87040239         d', '8x12             -', 'cd-012-008       B', 'ex9111-428       0');")
+F.Data.DataTable.CreateFromSQL("dtRouterLines","con","select * from ROUTER_LINE where ROUTER_TYPE = 'L' and LMO != 'C' order by ROUTER, ROUTER_SUFFIX, LINE_ROUTER;",True)
+F.ODBC.Connection!con.Close
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMessage,"ScriptFile",V.Caller.ScriptFile,"CurrentSubroutine",V.Ambient.CurrentSubroutine)
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.GetRouterLinesTable.End
+
+Program.Sub.LoopThroughLines.Start
+'V.Args.Inc, V.Args.Vendor
+V.Local.sFilter.Declare
+V.Local.sSeq.Declare
+V.Local.sSQL.Declare
+V.Local.sSQLFile.Declare
+V.Local.sSQLSelling.Declare
+V.Local.sSQLFilePath.Declare
+V.Local.sSQLSellingPath.Declare
+V.Local.sDescr.Declare
+V.Local.sTemp.Declare
+V.Local.sTemp2.Declare
+V.Local.sComm.Declare
+V.Local.sRtr.Declare
+V.Local.iCnt.Declare
+V.Local.iLine.Declare
+V.Local.iPNT.Declare
+V.Local.iMatCnt.Declare
+V.Local.iRowIndex.Declare
+V.Local.iSeq.Declare
+V.Local.fCost.Declare
+V.Local.fExt.Declare
+V.Local.fSetup.Declare
+V.Local.iLead.Declare
+V.Local.sFilePath.Declare
+V.Local.sFileString.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.String.Build("{0}SQL_ROUTER_LINES.txt",V.Caller.LocalGSSTempDir,V.Local.sSQLFilePath)
+F.Intrinsic.String.Build("{0}\GCG_5916_ROUTER_HEADER.txt",V.Caller.FilesDir,V.Local.sFilePath)
+
+F.Data.DataView.Create("dtRouterLines","dvRouter")
+F.ODBC.Connection!con.OpenCompanyConnection
+F.Intrinsic.Control.For(V.Local.iCnt,0,V.DataTable.dtRouters.RowCount--,1)
+	V.Local.sRtr.Set(V.DataTable.dtRouters(V.Local.iCnt).ROUTER!FieldVal)
+	F.Global.Inventory.GetPartInfo(V.Local.sRtr,"","",V.Local.sDescr)
+	F.Intrinsic.Control.If(V.Local.sDescr,!=,"***NOPARTFOUND***")
+		F.Intrinsic.String.Split(V.Local.sDescr,"*!*",V.Local.sDescr)
+		F.Intrinsic.String.Build("{0}*!*{1}",V.Local.sRtr,V.Local.sDescr(1),V.Local.sDescr(0))
+		V.Local.sDescr.RedimPreserve(0,0)
+	F.Intrinsic.Control.Else
+		F.Intrinsic.String.Build("{0}*!*",V.Local.sRtr,V.Local.sDescr)
+	F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.If(V.Local.sFileString.Trim,!=,"")
+		F.Intrinsic.String.Build("{0}{1}",V.Local.sFileString,V.Ambient.NewLine,V.Local.sFileString)
+	F.Intrinsic.Control.EndIf
+	F.Intrinsic.String.Build("{0}{1}",V.Local.sFileString,V.Local.sDescr,V.Local.sFileString)
+	'Set Preliminary variables
+	V.Local.iLine.Set(0)
+	V.Local.iPNT.Set(-1)
+	'V.Local.iMatCnt starts at 1 to include the PNT line on the subtract later on
+	'honestly math is hard let's start at 0
+	V.Local.iMatCnt.Set(0)
+	'TODO: set markup
+	V.Local.fCost.Set(0.0)
+	V.Local.fSetup.Set(0.0)
+	V.Local.iLead.Set(0.0)
+	
+	'Set Dataview
+	F.Intrinsic.String.Replace(V.DataTable.dtRouters(V.Local.iCnt).ROUTER!FieldVal,"'","''",V.Local.sFilter)
+	F.Intrinsic.String.Build("[ROUTER] = '{0}' and [ROUTER_SUFFIX] = '{1}'",V.Local.sFilter,V.DataTable.dtRouters(V.Local.iCnt).ROUTER_SUFFIX!FieldVal,V.Ambient.DblQuote,V.Local.sFilter)
+	F.Data.DataView.SetFilter("dtRouterLines","dvRouter",V.Local.sFilter)
+	
+	'Begin looping through Dataview of Router Lines for specific router
+	V.Local.sDescr.Set("")
+	V.Local.sComm.Set("")
+	F.Intrinsic.Control.Do
+		F.Intrinsic.Control.If(V.DataView.dtRouterLines!dvRouter(V.Local.iLine).PART_WC_OUTSIDE!FieldValTrim,=,"PNT")
+			'Found the work center, work the parser back looking at material sequences
+			V.Local.iPNT.Set(V.Local.iLine)
+			'Record the cost of the labor sequence
+			F.Intrinsic.Math.Mult(V.DataView.dtRouterLines!dvRouter(V.Local.iLine).RUN_TIME!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).RATE!FieldVal,V.Local.fExt)
+			F.Intrinsic.Math.Add(V.Local.fCost,V.Local.fExt,V.Local.fCost)
+			F.Intrinsic.Math.Add(V.DataView.dtRouterLines!dvRouter(V.Local.iLine).SET_UP!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).RUN_TIME!FieldVal,V.Local.iLead)
+			F.Intrinsic.Math.Add(V.Local.iLead,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).LEAD_TIME!FieldVal,V.Local.iLead)
+			
+			'We need to check one line ahead to see if there is a second PNT Labor sequence (first one could be setup, second could be actual) 
+			F.Intrinsic.Math.Add(V.Local.iLine,1,V.Local.iLine)
+			F.Intrinsic.Control.If(V.Local.iLine,<=,V.DataView.dtRouterLines!dvRouter.RowCount--)
+				'This check verifies we did not step outside the bounds of the dataview
+				F.Intrinsic.Control.If(V.DataView.dtRouterLines!dvRouter(V.Local.iLine).PART_WC_OUTSIDE!FieldValTrim,=,"PNT")
+					'Record the cost of the labor sequence
+					F.Intrinsic.Math.Mult(V.DataView.dtRouterLines!dvRouter(V.Local.iLine).RUN_TIME!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).RATE!FieldVal,V.Local.fExt)
+					F.Intrinsic.Math.Add(V.Local.fCost,V.Local.fExt,V.Local.fCost)
+					F.Intrinsic.Math.Add(V.DataView.dtRouterLines!dvRouter(V.Local.iLine).SET_UP!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).RUN_TIME!FieldVal,V.Local.iLead)
+					F.Intrinsic.Math.Add(V.Local.iLead,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).LEAD_TIME!FieldVal,V.Local.iLead)
+					
+					'delete ROUTER_LINE entry
+					F.Intrinsic.String.Build("delete from ROUTER_LINE where ROUTER = '{0}' and ROUTER_SUFFIX = '{1}' and ROUTER_TYPE = '{2}' and LINE_ROUTER = '{3}';",V.Local.sRtr.PSQLFriendly,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).ROUTER_SUFFIX!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).ROUTER_TYPE!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).LINE_ROUTER!FieldVal,V.Local.sSQL)
+					F.Intrinsic.String.Build("{0}{1}{2}",V.Local.sSQLFile,V.Ambient.NewLine,V.Local.sSQL,V.Local.sSQLFile)
+					F.ODBC.Connection!con.Execute(V.Local.sSQL)
+					
+					'delete comments
+					F.Intrinsic.String.Build("delete from RTR_SEQ_COMMENTS where RTR_NUMBER = '{0}' and RTR_SEQ = '{1}';",V.Local.sRtr.PSQLFriendly,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).LINE_ROUTER!FieldVal,V.Local.sSQL)
+					F.Intrinsic.String.Build("{0}{1}{2}",V.Local.sSQLFile,V.Ambient.NewLine,V.Local.sSQL,V.Local.sSQLFile)
+					F.ODBC.Connection!con.Execute(V.Local.sSQL)
+					'We'll be deleting this later
+					F.Data.DataView.SetValue("dtRouterLines","dvRouter",V.Local.iLine,"LINE_ROUTER","DELETE")
+				F.Intrinsic.Control.EndIf
+			F.Intrinsic.Control.EndIf
+			
+			'Increment backwards
+			F.Intrinsic.Math.Sub(V.Local.iLine,2,V.Local.iLine)
+			F.Intrinsic.Control.If(V.Local.iLine,<,0)
+				F.Intrinsic.Control.ExitDo
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.ElseIf(V.Local.iPNT,!=,-1)
+			'looking at material sequences
+			F.Intrinsic.Control.If(V.DataView.dtRouterLines!dvRouter(V.Local.iLine).LMO!FieldValTrim,!=,"M")
+				F.Intrinsic.Control.If(V.DataView.dtRouterLines!dvRouter(V.Local.iLine).LMO!FieldValTrim,!=,"L",or,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).PART_WC_OUTSIDE!FieldValTrim,!=,"SHIP")
+					'adding in Labor step for SHIP, this will be treated as an extra material sequence and end the Do Loop
+					F.Intrinsic.Control.ExitDo
+				F.Intrinsic.Control.EndIf
+			F.Intrinsic.Control.EndIf
+						
+			'delete this line from the table
+			F.Intrinsic.String.Build("delete from ROUTER_LINE where ROUTER = '{0}' and ROUTER_SUFFIX = '{1}' and ROUTER_TYPE = '{2}' and LINE_ROUTER = '{3}';",V.Local.sRtr.PSQLFriendly,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).ROUTER_SUFFIX!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).ROUTER_TYPE!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).LINE_ROUTER!FieldVal,V.Local.sSQL)
+			F.Intrinsic.String.Build("{0}{1}{2}",V.Local.sSQLFile,V.Ambient.NewLine,V.Local.sSQL,V.Local.sSQLFile)
+			F.ODBC.Connection!con.Execute(V.Local.sSQL)
+			
+			'delete comments
+			F.Intrinsic.String.Build("delete from RTR_SEQ_COMMENTS where RTR_NUMBER = '{0}' and RTR_SEQ = '{1}';",V.Local.sRtr.PSQLFriendly,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).LINE_ROUTER!FieldVal,V.Local.sSQL)
+			F.Intrinsic.String.Build("{0}{1}{2}",V.Local.sSQLFile,V.Ambient.NewLine,V.Local.sSQL,V.Local.sSQLFile)
+			F.ODBC.Connection!con.Execute(V.Local.sSQL)
+			
+			F.Intrinsic.Control.If(V.DataView.dtRouterLines!dvRouter(V.Local.iLine).LMO!FieldValTrim,=,"L",and,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).PART_WC_OUTSIDE!FieldValTrim,=,"SHIP")
+				V.Local.sSeq.Set(V.DataView.dtRouterLines!dvRouter(V.Local.iLine).LINE_ROUTER!FieldVal)
+				F.Intrinsic.Control.If(V.Local.sSeq.Right2,=,"00")
+					F.Intrinsic.Math.Add(V.Local.iMatCnt,1,V.Local.iMatCnt)
+				F.Intrinsic.Control.EndIf
+			F.Intrinsic.Control.Else
+				F.Intrinsic.Math.Add(V.Local.iMatCnt,1,V.Local.iMatCnt)
+			F.Intrinsic.Control.EndIf
+			
+			'Change something to update the row state
+			F.Data.DataView.SetValue("dtRouterLines","dvRouter",V.Local.iLine,"LINE_ROUTER","DELETE")
+			
+			'Record cost and qty from material sequence
+			F.Intrinsic.Math.Mult(V.DataView.dtRouterLines!dvRouter(V.Local.iLine).RUN_TIME!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).RATE!FieldVal,V.Local.fExt)
+			F.Intrinsic.Math.Add(V.Local.fCost,V.Local.fExt,V.Local.fCost)
+			F.Intrinsic.Math.Add(V.Local.fSetup,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).SET_UP!FieldVal,V.Local.fSetup)
+			F.Intrinsic.Control.If(V.Local.sDescr,=,"")
+				V.Local.sDescr.Set(V.DataView.dtRouterLines!dvRouter(V.Local.iLine).DESC_RT_LINE!FieldValTrim)
+			F.Intrinsic.Control.Else
+				F.Intrinsic.String.Build("{0}...{1}",V.Local.sDescr,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).DESC_RT_LINE!FieldValTrim,V.Local.sDescr)
+			F.Intrinsic.Control.EndIf
+			
+			'If we've arrived at the Ship step, nuke the do loop
+			F.Intrinsic.Control.If(V.DataView.dtRouterLines!dvRouter(V.Local.iLine).LMO!FieldValTrim,=,"L",and,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).PART_WC_OUTSIDE!FieldValTrim,=,"SHIP")
+				F.Intrinsic.Control.ExitDo
+			F.Intrinsic.Control.EndIf
+			
+			'Increment backwards
+			F.Intrinsic.Math.Sub(V.Local.iLine,1,V.Local.iLine)
+			F.Intrinsic.Control.If(V.Local.iLine,<,0)
+				F.Intrinsic.Control.ExitDo
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.Else
+			'Increment forwards
+			F.Intrinsic.Math.Add(V.Local.iLine,1,V.Local.iLine)
+			F.Intrinsic.Control.If(V.Local.iLine,>,V.DataView.dtRouterLines!dvRouter.RowCount--)
+				F.Intrinsic.Control.ExitDo
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.Loop
+	
+	'If V.Local.iPNT is not -1, there was a PNT work center (which is a given because we are only looping through routers that have the PNT work center, duh)
+	F.Intrinsic.Control.If(V.Local.iPNT,!=,-1)
+		'Adendum - editnew description so it's 30 characters and the write the rest to the comments
+		F.Intrinsic.Control.If(V.Local.sDescr.Length,>,30)
+			V.Local.sComm.Set(V.Local.sDescr)
+			V.Local.sDescr.Set(V.Local.sDescr.Left30)
+		F.Intrinsic.Control.EndIf
+		'TODO: edit labor line
+		F.Data.DataView.SetValue("dtRouterLines","dvRouter",V.Local.iPNT,"LMO","O","PART_WC_OUTSIDE",V.DataTable.dtRouters(V.Local.iCnt).ROUTER!FieldVal,"OPERATION",V.Args.Vendor,"SET_UP",0,"RUN_TIME",1,"RATE",V.Local.fCost,"DESC_RT_LINE",V.Local.sDescr,"UM_INVENTORY","EA","WC_FACTOR",0,"RUN_TIME_D6",1,"LEAD_TIME",40)
+		
+		'update the Sequence numbers
+		F.Intrinsic.Math.Sub(V.Local.iPNT,V.Local.iMatCnt,V.Local.iLine)
+		F.Intrinsic.Control.If(V.Local.iLine,<=,0)
+			V.Local.iSeq.Set(V.Args.Inc)
+		F.Intrinsic.Control.Else
+			F.Intrinsic.Math.Mult(V.Local.iMatCnt,V.Args.Inc,V.Local.iSeq)
+			F.Intrinsic.Math.Sub(V.DataView.dtRouterLines!dvRouter(V.Local.iPNT).LINE_ROUTER!FieldValLong,V.Local.iSeq,V.Local.iSeq)
+		F.Intrinsic.Control.EndIf
+		
+		F.Intrinsic.Control.For(V.Local.iLine,V.Local.iPNT,V.DataView.dtRouterLines!dvRouter.RowCount--,1)
+			F.Intrinsic.Control.If(V.DataView.dtRouterLines!dvRouter(V.Local.iLine).LINE_ROUTER!FieldVal,!=,"DELETE")
+				F.Intrinsic.String.Build("delete from ROUTER_LINE where ROUTER = '{0}' and ROUTER_SUFFIX = '{1}' and ROUTER_TYPE = '{2}' and LINE_ROUTER = '{3}';",V.Local.sRtr.PSQLFriendly,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).ROUTER_SUFFIX!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).ROUTER_TYPE!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).LINE_ROUTER!FieldVal,V.Local.sSQL)
+				F.Intrinsic.String.Build("{0}{1}{2}",V.Local.sSQLFile,V.Ambient.NewLine,V.Local.sSQL,V.Local.sSQLFile)
+				F.ODBC.Connection!con.Execute(V.Local.sSQL)
+				
+				F.Intrinsic.String.LPad(V.Local.iSeq.String,"0",6,V.Local.sSeq)
+				F.Intrinsic.Math.Add(V.Local.iLine,1,V.Local.iSeq)
+				F.Intrinsic.Control.If(V.Local.iSeq,<=,V.DataView.dtRouterLines!dvRouter.RowCount--)
+					F.Intrinsic.Control.If(V.DataView.dtRouterLines!dvRouter(V.Local.iSeq).LINE_ROUTER!FieldValString,=,"DELETE")
+						V.Local.iSeq.Set(V.Args.Inc)
+					F.Intrinsic.Control.Else
+						F.Intrinsic.Math.Sub(V.DataView.dtRouterLines!dvRouter(V.Local.iSeq).LINE_ROUTER!FieldValLong,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).LINE_ROUTER!FieldValLong,V.Local.iSeq)
+					F.Intrinsic.Control.EndIf
+					F.Intrinsic.Math.Add(V.Local.iSeq,V.Local.sSeq,V.Local.iSeq)
+				F.Intrinsic.Control.EndIf
+				'Check for comments
+				F.Intrinsic.String.Build("select TEXT from RTR_SEQ_COMMENTS where RTR_NUMBER = '{0}' and RTR_SEQ = '{1}';",V.Local.sRtr.PSQLFriendly,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).LINE_ROUTER!FieldVal,V.Local.sSQL)
+				F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sSQL)
+				F.Intrinsic.Control.If(V.Ambient.ExecuteAndReturnEOF.Not)
+					'Move comments to new sequence and delete old notes
+					F.Intrinsic.String.Build("delete from RTR_SEQ_COMMENTS where RTR_NUMBER = '{0}' and RTR_SEQ = '{1}';",V.Local.sRtr.PSQLFriendly,V.Local.sSeq,V.Local.sTemp)
+					F.Intrinsic.String.Build("{0}{1}{2}",V.Local.sSQLFile,V.Ambient.NewLine,V.Local.sTemp,V.Local.sSQLFile)
+					F.ODBC.Connection!con.Execute(V.Local.sTemp)
+					F.Intrinsic.String.Build("insert into RTR_SEQ_COMMENTS (RTR_NUMBER, RTR_SEQ, TEXT) values ('{0}', '{1}', '{2}');",V.Local.sRtr.PSQLFriendly,V.Local.sSeq,V.Local.sSQL.PSQLFriendly,V.Local.sSQL)
+					F.Intrinsic.String.Build("{0}{1}{2}",V.Local.sSQLFile,V.Ambient.NewLine,V.Local.sSQL,V.Local.sSQLFile)
+					F.ODBC.Connection!con.Execute(V.Local.sSQL)
+					F.Intrinsic.String.Build("delete from RTR_SEQ_COMMENTS where RTR_NUMBER = '{0}' and RTR_SEQ = '{1}';",V.Local.sRtr.PSQLFriendly,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).LINE_ROUTER!FieldVal,V.Local.sSQL)
+					F.Intrinsic.String.Build("{0}{1}{2}",V.Local.sSQLFile,V.Ambient.NewLine,V.Local.sSQL,V.Local.sSQLFile)
+					F.ODBC.Connection!con.Execute(V.Local.sSQL)
+				F.Intrinsic.Control.EndIf
+				F.Data.DataTable.SetValue("dtRouterLines",V.DataView.dtRouterLines!dvRouter(V.Local.iLine).DataTableIndex,"LINE_ROUTER",V.Local.sSeq)
+				F.Intrinsic.Control.If(V.DataView.dtRouterLines!dvRouter(V.Local.iLine).PART_WC_OUTSIDE!FieldVal,=,V.DataTable.dtRouters(V.Local.iCnt).ROUTER!FieldVal,and,V.Local.sComm,!=,"")
+					'Save comments
+					F.Intrinsic.String.Replace(V.Local.sComm,"...",V.Ambient.NewLine,V.Local.sComm)
+					F.Intrinsic.String.Build("select TEXT from RTR_SEQ_COMMENTS where RTR_NUMBER = '{0}' and RTR_SEQ = '{1}';",V.Local.sRtr.PSQLFriendly,V.Local.sSeq,V.Local.sSQL)
+					F.ODBC.Connection!con.ExecuteAndReturn(V.Local.sSQL,V.Local.sSQL)
+					F.Intrinsic.Control.If(V.Ambient.ExecuteAndReturnEOF)
+						'No Seq comments, insert new comments
+						F.Intrinsic.String.Build("insert into RTR_SEQ_COMMENTS (RTR_NUMBER, RTR_SEQ, TEXT) values ('{0}', '{1}', '{2}');",V.Local.sRtr.PSQLFriendly,V.Local.sSeq,V.Local.sComm.PSQLFriendly,V.Local.sSQL)
+					F.Intrinsic.Control.Else
+						'Seq comments exists, update with new comments
+						F.Intrinsic.String.Build("{0}{2}{1}",V.Local.sSQL,V.Local.sComm,V.Ambient.NewLine,V.Local.sComm)
+						F.Intrinsic.String.Build("update RTR_SEQ_COMMENTS set TEXT = '{2}' where RTR_NUMBER = '{0}' and RTR_SEQ = '{1}';",V.Local.sRtr.PSQLFriendly,V.Local.sSeq,V.Local.sComm.PSQLFriendly,V.Local.sSQL)
+					F.Intrinsic.Control.EndIf
+					F.Intrinsic.String.Build("{0}{1}{2}",V.Local.sSQLFile,V.Ambient.NewLine,V.Local.sSQL,V.Local.sSQLFile)
+					F.ODBC.Connection!con.Execute(V.Local.sSQL)
+				F.Intrinsic.Control.EndIf
+				V.Local.sTemp.Set(V.DataView.dtRouterLines!dvRouter(V.Local.iLine).DESC_RT_LINE!FieldVal)
+				V.Local.sTemp2.Set(V.DataView.dtRouterLines!dvRouter(V.Local.iLine).PART_WC_OUTSIDE!FieldVal)
+				F.Intrinsic.String.Build("insert into ROUTER_LINE (ROUTER, ROUTER_SUFFIX, ROUTER_TYPE, LINE_ROUTER, ROUTER_INSERT, LMO, PART_WC_OUTSIDE, OPERATION, SET_UP, RUN_TIME, RATE, FILLER, FREQUENCY, MULTIPLE, DESC_RT_LINE, UM_INVENTORY, OVERLAP, WC_FACTOR, ACTUAL_WT, FLAG_MINIMUM, AMT_MINIMUM, SEC_MIN_HR, GROUP_SEQUENCE, CREW_SIZE, RUN_TIME_D6, MES_PROCESS_ID, PRICE_PERCENT, FLAG_MAIN_COMMENT, LEAD_TIME, PART_LOCN, TOOLING_SEQ, SORT_CODE, PROJ_GROUP, SIGNOFF_GRPUSR, SIGNOFF_TYPE, BUILT_FROM_BOM, ALLOW_CHRG, OMIT_FROM_WO, FINAL_OVERRIDE_FLG, OTH_LANGUAGE) values ('{0}', '{1}', '{2}', '{3}', '{4}', '{5}', '{6}', '{7}', {8}, {9}, {10}, '{11}', {12}, {13}, '{14}', '{15}', {16}, {17}, {18}, '{19}', {20}, '{21}', '{22}', {23}, {24}, {25}, {26}, '{27}', {28}, '{29}', '{30}', '{31}', '{32}', '{33}', '{34}', '{35}', '{36}', '{37}', '{38}', '{39}');",V.Local.sRtr.PSQLFriendly,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).ROUTER_SUFFIX!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).ROUTER_TYPE!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).LINE_ROUTER!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).ROUTER_INSERT!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).LMO!FieldVal,V.Local.sTemp2.PSQLFriendly,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).OPERATION!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).SET_UP!FieldValString,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).RUN_TIME!FieldValString,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).RATE!FieldValString,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).FILLER!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).FREQUENCY!FieldValString,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).MULTIPLE!FieldValString,V.Local.sTemp.PSQLFriendly,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).UM_INVENTORY!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).OVERLAP!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).WC_FACTOR!FieldValString,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).ACTUAL_WT!FieldValString,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).FLAG_MINIMUM!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).AMT_MINIMUM!FieldValString,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).SEC_MIN_HR!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).GROUP_SEQUENCE!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).CREW_SIZE!FieldValString,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).RUN_TIME_D6!FieldValString,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).MES_PROCESS_ID!FieldValString,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).PRICE_PERCENT!FieldValString,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).FLAG_MAIN_COMMENT!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).LEAD_TIME!FieldValString,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).PART_LOCN!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).TOOLING_SEQ!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).SORT_CODE!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).PROJ_GROUP!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).SIGNOFF_GRPUSR!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).SIGNOFF_TYPE!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).BUILT_FROM_BOM!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).ALLOW_CHRG!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).OMIT_FROM_WO!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).FINAL_OVERRIDE_FLG!FieldVal,V.DataView.dtRouterLines!dvRouter(V.Local.iLine).OTH_LANGUAGE!FieldVal,V.Local.sSQL)
+				F.Intrinsic.String.Build("{0}{1}{2}",V.Local.sSQLFile,V.Ambient.NewLine,V.Local.sSQL,V.Local.sSQLFile)
+				F.ODBC.Connection!con.Execute(V.Local.sSQL)
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.Next(V.Local.iLine)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Next(V.Local.iCnt)
+F.ODBC.Connection!con.Close
+F.Data.DataView.Close("dtRouterLines","dvRouter")
+
+F.Intrinsic.File.String2File(V.Local.sSQLFilePath,V.Local.sSQLFile)
+F.Intrinsic.File.String2File(V.Local.sFilePath,V.Local.sFileString)
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorMessage,"ScriptFile",V.Caller.ScriptFile,"CurrentSubroutine",V.Ambient.CurrentSubroutine)
+	F.Intrinsic.Control.If(V.Args.Excel)
+		F.Automation.MSExcel.SaveWorkbook("oExportWorkbook")
+		F.Automation.Generic.DestroyObject(V.Args.BeforeWorksheet)
+		F.Automation.Generic.DestroyObject(V.Args.AfterWorksheet)
+		F.Automation.Generic.DestroyObject("oExportWorkbook")
+		F.Automation.Generic.DestroyObject("oExcel")
+	F.Intrinsic.Control.ElseIf(V.Args.Calc)
+		F.Automation.OOCalc.SaveWorkbook("oOOContainer","oExportWorkbook",V.Local.sFile)
+		F.Automation.Generic.DestroyObject(V.Args.BeforeWorksheet)
+		F.Automation.Generic.DestroyObject(V.Args.AfterWorksheet)
+		F.Automation.Generic.DestroyObject("oExportWorkbook")
+		F.Automation.Generic.DestroyObject("oCalc")
+		F.Automation.Generic.DestroyObject("oOOContainer")
+	F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.LoopThroughLines.End
+
+Program.Sub.SaveToExcel.Start
+V.Local.sWorksheet.Declare
+V.Local.sCols.Declare
+V.Local.sCol.Declare
+V.Local.iColIndex.Declare
+V.Local.iCol.Declare
+V.Local.iRowIndex.Declare
+V.Local.iRow.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.Control.If(V.Args.Excel)
+	F.Intrinsic.Control.If(V.Args.Sheet,=,"Before")
+		V.Local.sWorksheet.Set("oBeforeWorksheet")
+		F.Automation.MSExcel.CreateWorksheet("oExportWorkbook",V.Local.sWorksheet,"Before")
+		F.Intrinsic.Variable.AddRV("BeforeWorksheet",V.Local.sWorksheet)
+	F.Intrinsic.Control.Else
+		V.Local.sWorksheet.Set("oAfterWorksheet")
+		F.Automation.MSExcel.CreateWorksheet("oExportWorkbook",V.Local.sWorksheet,"After")
+		F.Intrinsic.Variable.AddRV("AfterWorksheet",V.Local.sWorksheet)
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.String.Split(V.DataTable.dtRouterLines.FieldNames,"*!*",V.Local.sCols)
+	F.Intrinsic.Control.For(V.Local.iColIndex,0,V.Local.sCols.UBound,1)
+		F.Intrinsic.Math.Add(V.Local.iColIndex,1,V.Local.iCol)
+		F.Automation.MSExcel.WriteCell(V.Local.sWorksheet,1,V.Local.iCol,V.Local.sCols(V.Local.iColIndex))
+	F.Intrinsic.Control.Next(V.Local.iColIndex)
+	
+	F.Intrinsic.Control.For(V.Local.iRowIndex,0,V.DataTable.dtRouterLines.RowCount--,1)
+		F.Intrinsic.Math.Add(V.Local.iRowIndex,2,V.Local.iRow)
+		F.Intrinsic.Control.For(V.Local.iColIndex,0,V.Local.sCols.UBound,1)
+			F.Intrinsic.Math.Add(V.Local.iColIndex,1,V.Local.iCol)
+			V.Local.sCol.Set(V.Local.sCols(V.Local.iColIndex))
+			F.Automation.MSExcel.WriteCell(V.Local.sWorksheet,V.Local.iRow,V.Local.iCol,V.DataTable.dtRouterLines(V.Local.iRowIndex).[V.Local.sCol]!FieldValString)
+			F.Intrinsic.Control.If(V.DataTable.dtRouterLines(V.Local.iRowIndex).LINE_ROUTER!FieldVal,=,"DELETE")
+				F.Automation.MSExcel.FormatCell(V.Local.sWorksheet,V.Local.iRow,V.Local.iCol,"[Red]General")
+			F.Intrinsic.Control.ElseIf(V.DataTable.dtRouterLines(V.Local.iRowIndex).RowState,!=,2)
+				F.Automation.MSExcel.FormatCell(V.Local.sWorksheet,V.Local.iRow,V.Local.iCol,"[Blue]General")
+			F.Intrinsic.Control.Else
+				F.Automation.MSExcel.FormatCell(V.Local.sWorksheet,V.Local.iRow,V.Local.iCol,"General")
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.Next(V.Local.iColIndex)
+	F.Intrinsic.Control.Next(V.Local.iRowIndex)
+F.Intrinsic.Control.ElseIf(V.Args.Calc)
+	F.Intrinsic.Control.If(V.Args.Sheet,=,"Before")
+		V.Local.sWorksheet.Set("oBeforeWorksheet")
+		F.Automation.OOCalc.CreateWorksheet("oExportWorkbook",V.Args.Sheet,1)
+		F.Automation.OOCalc.OpenWorksheet("oExportWorkbook",V.Local.sWorksheet,1)
+		F.Intrinsic.Variable.AddRV("BeforeWorksheet",V.Local.sWorksheet)
+	F.Intrinsic.Control.Else
+		V.Local.sWorksheet.Set("oAfterWorksheet")
+		F.Automation.OOCalc.CreateWorksheet("oExportWorkbook",V.Args.Sheet,2)
+		F.Automation.OOCalc.OpenWorksheet("oExportWorkbook",V.Local.sWorksheet,2)
+		F.Intrinsic.Variable.AddRV("AfterWorksheet",V.Local.sWorksheet)
+	F.Intrinsic.Control.EndIf
+	
+	F.Intrinsic.String.Split(V.DataTable.dtRouterLines.FieldNames,"*!*",V.Local.sCols)
+	F.Intrinsic.Control.For(V.Local.iColIndex,0,V.Local.sCols.UBound,1)
+		F.Automation.OOCalc.WriteCell(V.Local.sWorksheet,0,V.Local.iColIndex,V.Local.sCols(V.Local.iColIndex))
+	F.Intrinsic.Control.Next(V.Local.iColIndex)
+	
+	F.Intrinsic.Control.For(V.Local.iRowIndex,0,V.DataTable.dtRouterLines.RowCount--,1)
+		F.Intrinsic.Math.Add(V.Local.iRowIndex,1,V.Local.iRow)
+		F.Intrinsic.Control.For(V.Local.iColIndex,0,V.Local.sCols.UBound,1)
+			V.Local.sCol.Set(V.Local.sCols(V.Local.iColIndex))
+			F.Automation.OOCalc.WriteCell(V.Local.sWorksheet,V.Local.iRow,V.Local.iColIndex,V.DataTable.dtRouterLines(V.Local.iRowIndex).[V.Local.sCol]!FieldValString)
+		F.Intrinsic.Control.Next(V.Local.iColIndex)
+	F.Intrinsic.Control.Next(V.Local.iRowIndex)
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.String.Build("{0},{1}",V.Ambient.CurrentSubroutine,V.Args.Sheet,V.Local.sWorksheet)
+	F.Intrinsic.Control.CallSub(ErrorMessage,"ScriptFile",V.Caller.ScriptFile,"CurrentSubroutine",V.Local.sWorksheet)
+	F.Intrinsic.Control.If(V.Args.Excel)
+		F.Automation.MSExcel.SaveWorkbook("oExportWorkbook")
+		F.Automation.Generic.DestroyObject(V.Args.BeforeWorksheet)
+		F.Intrinsic.Control.If(V.Args.Sheet,=,"After")
+			F.Automation.Generic.DestroyObject(V.Args.AfterWorksheet)
+		F.Intrinsic.Control.EndIf
+		F.Automation.Generic.DestroyObject("oExportWorkbook")
+		F.Automation.Generic.DestroyObject("oExcel")
+	F.Intrinsic.Control.ElseIf(V.Args.Calc)
+		F.Automation.OOCalc.SaveWorkbook("oOOContainer","oExportWorkbook",V.Local.sFile)
+		F.Automation.Generic.DestroyObject(V.Args.BeforeWorksheet)
+		F.Intrinsic.Control.If(V.Args.Sheet,=,"After")
+			F.Automation.Generic.DestroyObject(V.Args.AfterWorksheet)
+		F.Intrinsic.Control.EndIf
+		F.Automation.Generic.DestroyObject("oExportWorkbook")
+		F.Automation.Generic.DestroyObject("oCalc")
+		F.Automation.Generic.DestroyObject("oOOContainer")
+	F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.SaveToExcel.End
+
+Program.Sub.Comments.Start
+${$5$}$3.0.0.0$}$1
+${$6$}$bbaker$}$20201022104056372$}$pM7xsHplA2E9VCTenDTJ47gi1rF/t66WndIV3r5a9Xd/H0yFUDGUg5kOU7oCy2+rUJu84aNeWTI=
+Program.Sub.Comments.End
