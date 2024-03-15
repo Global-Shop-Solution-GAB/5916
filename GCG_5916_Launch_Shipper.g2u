@@ -1,0 +1,32 @@
+Program.Sub.Preflight.Start
+Program.External.Include.Library("GCG_5916_Try_Catch.lib")
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+V.Local.sTitle.Declare
+V.Local.sShipParam.Declare
+V.Local.sBIFile.Declare
+F.Intrinsic.Control.Try
+
+F.Intrinsic.String.Build("SICTV ({0}) Shipper",V.Caller.CompanyCode,V.Local.sTitle)
+F.Intrinsic.UI.InvokeWaitDialog("Shipping SOs.",V.Local.sTitle)
+
+F.Intrinsic.String.Build("{0}{1}SHIPFILE",V.Caller.CompanyCode,V.Caller.Terminal,V.Local.sShipParam)
+'before I call the program, I want to create a file in the temp directory that the BI process hook checks for
+F.Intrinsic.String.Build("{0}GCG_5916_BI_SKIP.TXT",V.Caller.LocalGSSTempDir,V.Local.sBIFile)
+F.Intrinsic.File.String2File(V.Local.sBIFile,"DO NOT DELETE")
+'pass -c because Ranjit told me to :P, i assume it is for screenless mode or something
+F.Intrinsic.Task.LaunchGSSSync("ORD98HOD","-c",V.Local.sShipParam)
+
+F.Intrinsic.UI.CloseWaitDialog
+
+F.Intrinsic.Control.Catch
+	F.Intrinsic.Control.CallSub(ErrorLog,"ScriptFile",V.Caller.ScriptFile,"CurrentSubroutine",V.Ambient.CurrentSubroutine,"FolderName","SICTVErrors")
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndTry
+Program.Sub.Main.End
+
+Program.Sub.Comments.Start
+${$5$}$3.0.0.0$}$1
+${$6$}$bbaker$}$20200325095924889$}$pM7xsHplA2E9VCTenDTJ47gi1rF/t66WCIQo4YCIo+S/onBEwDS0IvS9ppFicWRdcn1zUUkdIzQ=
+Program.Sub.Comments.End
